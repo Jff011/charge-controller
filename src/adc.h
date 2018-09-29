@@ -20,4 +20,14 @@ private:
   Adafruit_ADS1115 _adc;
 };
 
+class Adcb {
+public:
+  Adcb(uint8_t address);
+  uint16_t read_raw(uint8_t channel);
+  uint16_t read_voltage(uint8_t channel);
+
+private:
+  Adafruit_ADS1115 _adcb;
+};
+
 #endif

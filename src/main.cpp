@@ -11,15 +11,18 @@
 #include "protection.h"
 #include "relay.h"
 #include "serial.h"
+#include "charge_control.h"
 
 SoftwareSerial comm(RX_PIN, TX_PIN);
 CellMonitors cell_monitors(comm);
 Adc adc(ADC_ADDRESS);
-Measurements measurements(&cell_monitors, &adc);
+Adcb adcb(ADCB_ADDRESS);
+Measurements measurements(&cell_monitors, &adc, &adcb);
 Protection protection(&measurements);
 Capacity capacity(NOMINAL_CAPACITY);
-Relay charge(CHARGE_PIN);
-Relay discharge(DISCHARGE_PIN);
+
+
+
 Timer timer;
 
 void update() {
@@ -34,8 +37,33 @@ void update() {
   uint8_t status = protection.status();
 
   if (status & PROTECTION_STATUS_FAULT) {
-    charge.disable();
-    discharge.disable();
+    charge_stop();
+    discharge_stop();
+  if (!cell_monitors.connect()) {
+    protection.fault();
+    serial::log("error", "main", "cell monitors not initialized");
+    return;
+  }
+
+  delay(1000);
+  measurements.zero_current();
+  capacity.begin();
+  update();
+
+  timer.every(1000, update);
+  timer.every(3000, log);
+
+  // 1 second watchdog
+  wdt_enable(WDTO_1S);
+
+  serial::log("info", "main", "ready");
+}
+
+void loop() {
+  timer.update();
+  wdt_reset();
+}
+();
   } else {
     if (status & PROTECTION_STATUS_OV) {
       if (!(last_status & PROTECTION_STATUS_OV)) {
@@ -104,34 +132,9 @@ void log() {
 }
 
 void setup() {
-  charge.disable();
-  discharge.disable();
+  charge_stop();
+  discharge_stop();
 
   serial::init();
 
   comm.begin(9600);
-
-  if (!cell_monitors.connect()) {
-    protection.fault();
-    serial::log("error", "main", "cell monitors not initialized");
-    return;
-  }
-
-  delay(1000);
-  measurements.zero_current();
-  capacity.begin();
-  update();
-
-  timer.every(1000, update);
-  timer.every(3000, log);
-
-  // 1 second watchdog
-  wdt_enable(WDTO_1S);
-
-  serial::log("info", "main", "ready");
-}
-
-void loop() {
-  timer.update();
-  wdt_reset();
-}

@@ -8,7 +8,8 @@ public:
   Relay(uint8_t pin);
   void enable();
   void disable();
-
+  void cut();
+  
 private:
   uint8_t _pin;
 };

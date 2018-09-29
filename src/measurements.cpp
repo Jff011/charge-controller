@@ -1,5 +1,4 @@
 #include <stdlib.h>
-
 #include "adc.h"
 #include "config.h"
 #include "measurements.h"
@@ -8,7 +7,7 @@
 // convert ADC reading to current (mA)
 #define CURRENT(adc) ((adc) * 1000 / ADC_VOLTAGE_SCALER / ACS758_SENSITIVITY)
 
-Measurements::Measurements(CellMonitors *cell_monitors, Adc *adc) : _cell_monitors(cell_monitors), _adc(adc) {
+Measurements::Measurements(CellMonitors *cell_monitors, Adc *adc, Adcb *adcb) : _cell_monitors(cell_monitors), _adc(adc),_adcb(adcb) {
   for (uint8_t i = 0; i < NUM_CELLS; i++) {
     _cell_voltages[i] = 0;
   }
@@ -18,12 +17,19 @@ Measurements::Measurements(CellMonitors *cell_monitors, Adc *adc) : _cell_monito
   _charge_adc_zero = 0;
   _discharge_current = 0;
   _discharge_adc_zero = 0;
+  // for second pack
+  _pack1_voltage = 0;
+  _charge1_current = 0;
+  _charge1_adc_zero = 0;
+  _discharge1_current = 0;
+  _discharge1_adc_zero = 0;
 }
 
 bool Measurements::update() {
   for (uint8_t i = 0; i < NUM_CELLS; i++) {
     uint8_t cell_address = i + 1;
     uint16_t voltage;
+  
 
     if (!_cell_monitors->read_voltage(cell_address, &voltage)) {
       serial::log("error", "measurements", "could not read cell voltage");
@@ -41,6 +47,15 @@ bool Measurements::update() {
 
   uint16_t adc_discharge_current = _adc->read_raw(ADC_CHANNEL_DISCHARGE_CURRENT);
   _discharge_current = CURRENT((int32_t) adc_discharge_current - (int32_t) _discharge_adc_zero);
+  //added second pack
+  uint16_t adcb_voltage = _adcb->read_voltage(ADC_CHANNEL_PACK_VOLTAGE);
+  _pack1_voltage = adcb_voltage * PACK_VOLTAGE_DIVIDER;
+
+  uint16_t adcb_charge_current = _adcb->read_raw(ADC_CHANNEL_CHARGE_CURRENT);
+  _charge1_current = CURRENT((int32_t) adcb_charge_current - (int32_t) _charge1_adc_zero);
+
+  uint16_t adcb_discharge_current = _adcb->read_raw(ADC_CHANNEL_DISCHARGE_CURRENT);
+  _discharge1_current = CURRENT((int32_t) adcb_discharge_current - (int32_t) _discharge1_adc_zero);
 
   return true;
 }
@@ -48,6 +63,9 @@ bool Measurements::update() {
 void Measurements::zero_current() {
   _charge_adc_zero = _adc->read_raw(ADC_CHANNEL_CHARGE_CURRENT);
   _discharge_adc_zero = _adc->read_raw(ADC_CHANNEL_DISCHARGE_CURRENT);
+  //second pack
+  _charge1_adc_zero = _adcb->read_raw(ADC_CHANNEL_CHARGE_CURRENT);
+  _discharge1_adc_zero = _adcb->read_raw(ADC_CHANNEL_DISCHARGE_CURRENT); 
 }
 
 uint16_t Measurements::cell_voltage(uint8_t index) {
@@ -64,4 +82,17 @@ int32_t Measurements::charge_current() {
 
 int32_t Measurements::discharge_current() {
   return _discharge_current;
+}
+
+//second pack
+uint16_t Measurements::pack1_voltage() {
+  return _pack1_voltage;
+}
+
+int32_t Measurements::charge1_current() {
+  return _charge1_current;
+}
+
+int32_t Measurements::discharge1_current() {
+  return _discharge1_current;
 }
