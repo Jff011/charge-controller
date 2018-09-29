@@ -20,9 +20,10 @@ Adcb adcb(ADCB_ADDRESS);
 Measurements measurements(&cell_monitors, &adc, &adcb);
 Protection protection(&measurements);
 Capacity capacity(NOMINAL_CAPACITY);
-
-
-
+Charge_control charge();
+Charge_control charge_stop();
+Charge_control discharge();
+Charge_control discharge_stop();
 Timer timer;
 
 void update() {
@@ -39,46 +40,21 @@ void update() {
   if (status & PROTECTION_STATUS_FAULT) {
     charge_stop();
     discharge_stop();
-  if (!cell_monitors.connect()) {
-    protection.fault();
-    serial::log("error", "main", "cell monitors not initialized");
-    return;
-  }
-
-  delay(1000);
-  measurements.zero_current();
-  capacity.begin();
-  update();
-
-  timer.every(1000, update);
-  timer.every(3000, log);
-
-  // 1 second watchdog
-  wdt_enable(WDTO_1S);
-
-  serial::log("info", "main", "ready");
-}
-
-void loop() {
-  timer.update();
-  wdt_reset();
-}
-();
   } else {
     if (status & PROTECTION_STATUS_OV) {
       if (!(last_status & PROTECTION_STATUS_OV)) {
         capacity.reset();
       }
 
-      charge.disable();
+      charge_stop();
     } else {
-      charge.enable();
+      charge();
     }
 
     if (status & PROTECTION_STATUS_UV) {
-      discharge.disable();
+      discharge_stop();
     } else {
-      discharge.enable();
+      discharge();
     }
   }
 }
@@ -138,3 +114,28 @@ void setup() {
   serial::init();
 
   comm.begin(9600);
+
+  if (!cell_monitors.connect()) {
+    protection.fault();
+    serial::log("error", "main", "cell monitors not initialized");
+    return;
+  }
+
+  delay(1000);
+  measurements.zero_current();
+  capacity.begin();
+  update();
+
+  timer.every(1000, update);
+  timer.every(3000, log);
+
+  // 1 second watchdog
+  wdt_enable(WDTO_1S);
+
+  serial::log("info", "main", "ready");
+}
+
+void loop() {
+  timer.update();
+  wdt_reset();
+}
